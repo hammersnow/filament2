@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="/foto">
+        <file>foto/Leidos-Logo.png</file>
+        <file alias="back">foto/vackkk.jpg</file>
+        <file>foto/soundoff.png</file>
+        <file>foto/silent.png</file>
+        <file>foto/volume-up.png</file>
+        <file>foto/Leidos-logo-AS@.png</file>
+        <file>foto/only_k.jpg</file>
+        <file>foto/soundon.png</file>
+        <file>foto/earth_from_space.jpg</file>
+        <file>foto/logo.png</file>
+        <file>foto/edsbackground.jpg</file>
+    </qresource>
+</RCC>

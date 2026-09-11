@@ -1,0 +1,9 @@
+filament2.ini
+*.pro.user
+*-build-*/
+build/
+Makefile
+*.o
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
