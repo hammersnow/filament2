@@ -1,5 +1,6 @@
 #include <QtGui/QApplication>
 #include "mainwindow.h"
+#include "controlstyle.h"
 #include <QDateEdit>
 #include <QLabel>
 #include <QLayout>
@@ -18,15 +19,9 @@ static void styleDateEdit(QDateEdit *edit)
     edit->setMinimumSize(0, 0);
     edit->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
     edit->setCalendarPopup(true);
-    edit->setDisplayFormat("d/M/yy");
-    edit->setStyleSheet(
-        "QDateEdit{background:#20262e;color:#eef2f6;border:1px solid #46515d;"
-        "border-radius:3px;padding:0px 18px 0px 6px;font-size:9pt;}"
-        "QDateEdit::drop-down{subcontrol-origin:border;subcontrol-position:top right;"
-        "width:14px;border-left:1px solid #46515d;background:#2b333d;"
-        "border-top-right-radius:3px;border-bottom-right-radius:3px;}"
-        "QDateEdit::drop-down:hover{background:#36414d;}"
-    );
+    prepareCalendar(edit);
+    edit->setDisplayFormat("dd.MM.yyyy");
+    edit->setStyleSheet(selectorStyle());
 }
 
 static void styleButton(QPushButton *button)
@@ -38,7 +33,7 @@ static void styleButton(QPushButton *button)
     button->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
     button->setStyleSheet(
         "QPushButton{background:#2b333d;color:#eef2f6;border:1px solid #46515d;"
-        "border-radius:3px;padding:0px 5px;font-weight:600;font-size:9pt;}"
+        "border-radius:6px;padding:2px 10px;font-weight:600;font-size:10pt;}"
         "QPushButton:hover{background:#36414d;}"
         "QPushButton:pressed{background:#222a32;}"
     );
@@ -88,11 +83,11 @@ static void placeControlRow(QWidget *page,
 
     const int rightMargin = 10;
     const int y = 0;
-    const int h = 19;
-    const int gap = 5;
-    const int dateW = 100;
-    const int okW = 65;
-    const int currentW = 110;
+    const int h = 40;
+    const int gap = 8;
+    const int dateW = 160;
+    const int okW = 78;
+    const int currentW = 128;
     const int totalW = dateW + gap + okW + gap + currentW;
 
     int usableWidth = referenceWidth;
@@ -193,7 +188,7 @@ static void restoreTubeSerialReadability(MainWindow &w)
 
     QString style = tab2->styleSheet();
     style += "\nQLabel[tubeSerialValue=\"true\"]{font-family:Monospace;}";
-    style += "\nQLabel[tubeSerialStatus=\"true\"]{font-family:Monospace;font-size:10px;}";
+    style += "\nQLabel[tubeSerialStatus=\"true\"]{font-family:Monospace;font-size:11px;}";
     tab2->setStyleSheet(style);
 }
 

@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "archive.h"
+#include "usagewidget.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -21,9 +23,7 @@
 #include <QTabWidget>
 #include <QTextBrowser>
 #include <QTextStream>
-#include <QSettings>
-#include <QCoreApplication>
-#include <QDir>
+#include <QStatusBar>
 
 namespace
 {
@@ -101,28 +101,7 @@ bool isNetworkB(const QString &id)
 
 QString dailyFilePath(const QDate &date)
 {
-    QString directory;
-    QStringList paths;
-    paths << QCoreApplication::applicationDirPath() + "/filament2.ini";
-    paths << QDir::currentPath() + "/filament2.ini";
-    paths << QCoreApplication::applicationDirPath() + "/../filament2.ini";
-    for (int i = 0; i < paths.size(); ++i) {
-        if (!QFileInfo(paths.at(i)).exists()) continue;
-        QSettings config(paths.at(i), QSettings::IniFormat);
-        directory = config.value("filament/daily_directory").toString().trimmed();
-        break;
-    }
-    if (directory.isEmpty()) return QString();
-    const QString base = directory + "/filament-" +
-                         date.toString("yyyy-MM-dd");
-
-    if (QFileInfo(base).exists())
-        return base;
-
-    if (QFileInfo(base + ".txt").exists())
-        return base + ".txt";
-
-    return base;
+    return Archive::resolve(Archive::Filament, date, Archive::Paths());
 }
 
 QString colorStyleForValue(double value)
@@ -197,8 +176,12 @@ bool parseDailyFile(const QString &path, QMap<QString, MachineFilament> *machine
         (*machines)[currentId] = machine;
     }
 
+    if (file.error() != QFile::NoError) { machines->clear(); return false; }
     file.close();
-    return !machines->isEmpty();
+    for (QMap<QString,MachineFilament>::const_iterator it = machines->constBegin(); it != machines->constEnd(); ++it)
+        if (!it.value().readings.isEmpty()) return true;
+    machines->clear();
+    return false;
 }
 
 int attentionCount(const MachineFilament &machine)
@@ -264,6 +247,13 @@ void setIndicator(QLabel *label, int issueCount, bool hasData)
     }
 }
 
+QMap<QString, QString> archiveErrors(const QStringList &ids, const QString &message)
+{
+    QMap<QString, QString> errors;
+    foreach (const QString &id, ids) errors.insert(id,message);
+    return errors;
+}
+
 QMap<QString, QString> readTubeCsv(const QString &path)
 {
     QMap<QString, QString> output;
@@ -272,16 +262,20 @@ QMap<QString, QString> readTubeCsv(const QString &path)
         output.insert(ids.at(i), QString());
 
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-        return output;
+    if (!QFileInfo(path).isFile() || !file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return archiveErrors(ids,QString::fromUtf8("Tüp arşivi okunamadı"));
 
     QTextStream in(&file);
+    in.setCodec("UTF-8");
+    if (in.readLine().trimmed() != QString::fromUtf8("Cihaz,Tüp,Sökülen Tüp,Sökülen Tarih,Takilan Tüp,Takilan Tarih"))
+        return archiveErrors(ids,QString::fromUtf8("Tüp arşivi başlığı geçersiz"));
     while (!in.atEnd())
     {
         const QString line = in.readLine();
         const QStringList parts = line.split(',', QString::KeepEmptyParts);
-        if (parts.size() < 6)
-            continue;
+        if (line.trimmed().isEmpty()) continue;
+        if (parts.size() != 6)
+            return archiveErrors(ids,QString::fromUtf8("Tüp arşivinde bozuk satır"));
 
         const QString id = parts.at(0).trimmed().toLower();
         if (!output.contains(id))
@@ -302,6 +296,10 @@ QMap<QString, QString> readTubeCsv(const QString &path)
         output[id] = current;
     }
 
+    if (file.error() != QFile::NoError)
+        return archiveErrors(ids,QString::fromUtf8("Tüp arşivi okuma hatası"));
+    foreach (const QString &id, ids)
+        if (output.value(id).isEmpty()) output[id] = QString::fromUtf8("Cihaz için tüp verisi yok");
     file.close();
     return output;
 }
@@ -316,8 +314,8 @@ QMap<QString, QString> readSectionValues(const QString &path,
         output.insert(ids.at(i), QString());
 
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-        return output;
+    if (!QFileInfo(path).isFile() || !file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return archiveErrors(ids,QString::fromUtf8("Arşiv okunamadı"));
 
     QTextStream in(&file);
     QRegExp idRx("(ED_[0-9]{2})");
@@ -357,6 +355,10 @@ QMap<QString, QString> readSectionValues(const QString &path,
             currentId.clear();
     }
 
+    if (file.error() != QFile::NoError)
+        return archiveErrors(ids,QString::fromUtf8("Arşiv okuma hatası"));
+    foreach (const QString &id, ids)
+        if (output.value(id).isEmpty()) output[id] = QString::fromUtf8("Cihaz için günlük değer yok");
     file.close();
     return output;
 }
@@ -375,6 +377,7 @@ void styleTubeLabel(QLabel *label, const QString &text, int kind)
         return;
 
     label->setFont(normalContentFont());
+    label->setTextFormat(Qt::PlainText);
     label->setTextInteractionFlags(Qt::NoTextInteraction);
     label->setWordWrap(true);
 
@@ -551,6 +554,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->scrollArea_3->setVisible(false);
     ui->scrollArea_4->setVisible(false);
 
+    ui->tabWidget->addTab(new UsageWidget(Archive::Paths(), ui->tabWidget),
+                         "Tube Usage");
     on_pushButton_clicked();
 }
 
@@ -572,6 +577,8 @@ void MainWindow::on_pushButton_clicked()
 {
     const QDate selectedDate = ui->dateEdit->date();
     const QString path = dailyFilePath(selectedDate);
+    ui->dateEdit->setToolTip(path);
+    statusBar()->showMessage(QString::fromUtf8("Filament kaynağı: ") + path);
 
     QMap<QString, MachineFilament> machines;
     const bool loaded = parseDailyFile(path, &machines);
@@ -635,7 +642,7 @@ void MainWindow::on_pushButton_clicked()
                     .arg(machine.id)
                     .arg(machine.ip)
                     .arg(machine.date)
-                    .arg(machine.readings.size())
+                    .arg(machine.readings.size()) + "\n" + path
             );
         }
 
@@ -678,10 +685,11 @@ void MainWindow::on_pushButton_clicked()
 
     if (!loaded)
     {
-        ui->redco->setText("0");
-        ui->orange->setText("0");
-        ui->sari->setText("0");
-        ui->yesil->setText("0");
+        ui->redco->setText("--");
+        ui->orange->setText("--");
+        ui->sari->setText("--");
+        ui->yesil->setText("--");
+        statusBar()->showMessage(QString::fromUtf8("Filament arşivi okunamadı veya ölçüm verisi yok: ") + path);
     }
 }
 
@@ -689,30 +697,39 @@ void MainWindow::on_pushButton_clicked()
 void MainWindow::on_pushButton_3_released()
 {
     const QDate selectedDate2 = ui->dateEdit_2->date();
-    const QString tubedate = selectedDate2.toString("yyyy-MM-dd");
-
-    const QMap<QString, QString> tubeData =
-        readTubeCsv("/root/tubelog/log/tube-" + tubedate + ".csv");
-    const QMap<QString, QString> onTimeData =
-        readSectionValues("/root/Eko/xrayontime/log/xrayontime-" + tubedate + ".csv",
-                          "Total", false);
+    const Archive::Paths paths;
+    const QString tubePath = Archive::resolve(Archive::Tubes, selectedDate2, paths);
+    const QString onPath = Archive::resolve(Archive::On, selectedDate2, paths);
+    const QString offPath = Archive::resolve(Archive::Off, selectedDate2, paths);
+    const QMap<QString, QString> tubeData = readTubeCsv(tubePath);
     const QMap<QString, QString> downTimeData =
-        readSectionValues("/root/Eko/xrayontime/offlog/xrayofftime-" + tubedate + ".csv",
-                          "Max", true);
+        readSectionValues(offPath, "Max", true);
+    ui->dateEdit_2->setToolTip(tubePath + "\n" + onPath + "\n" + offPath);
+    statusBar()->showMessage(QString::fromUtf8("Arşiv kaynakları: ") + tubePath + " | " + onPath + " | " + offPath);
 
     const QStringList tubes = tubeIds();
     for (int i = 0; i < tubes.size(); ++i)
     {
         const QString id = tubes.at(i);
-        styleTubeLabel(findChild<QLabel *>(id + "tub"), tubeData.value(id), 0);
+        QLabel *label = findChild<QLabel *>(id + "tub");
+        styleTubeLabel(label, tubeData.value(id), 0);
+        if (label) label->setToolTip(tubePath);
     }
 
     const QStringList xrays = xrayIds();
     for (int i = 0; i < xrays.size(); ++i)
     {
         const QString id = xrays.at(i);
-        styleTubeLabel(findChild<QLabel *>(id), onTimeData.value(id), 1);
-        styleTubeLabel(findChild<QLabel *>(id + "x"), downTimeData.value(id), 2);
+        qint64 seconds; QString error;
+        const bool valid = Archive::readOn(onPath, id, &seconds, &error);
+        QLabel *onLabel = findChild<QLabel *>(id), *offLabel = findChild<QLabel *>(id + "x");
+        styleTubeLabel(onLabel, valid ? "Total working time: " + Archive::duration(seconds) : error.section(": ",0,0), 1);
+        styleTubeLabel(offLabel, downTimeData.value(id), 2);
+        if (onLabel) {
+            onLabel->setToolTip(onPath);
+            if (!valid) onLabel->setStyleSheet("QLabel{background:#301b1b;color:#ffb56b;padding:4px;}");
+        }
+        if (offLabel) offLabel->setToolTip(offPath);
     }
 }
 

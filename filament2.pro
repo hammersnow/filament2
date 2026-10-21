@@ -18,9 +18,11 @@ RCC_DIR = /opt/.eko/filament2-build-desktop/.rcc
 UI_DIR = /opt/.eko/filament2-build-desktop/.ui
 
 SOURCES += main.cpp\
-        mainwindow.cpp
+        mainwindow.cpp \
+        archive.cpp \
+        usagewidget.cpp
 
-HEADERS  += mainwindow.h
+HEADERS  += mainwindow.h archive.h usagewidget.h controlstyle.h
 
 FORMS    += mainwindow.ui
 

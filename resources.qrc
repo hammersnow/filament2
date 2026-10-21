@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/foto">
+        <file alias="chevron-down.png">foto/chevron-down.png</file>
         <file>foto/Leidos-Logo.png</file>
         <file alias="back">foto/vackkk.jpg</file>
         <file>foto/soundoff.png</file>

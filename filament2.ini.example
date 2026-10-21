@@ -1,2 +1,3 @@
 [filament]
-daily_directory=/path/to/filament/Daily
+# Optional additional legacy fallback; /opt/Eko/logs/filament/Daily is always preferred.
+daily_directory=/home/eds_cm/eko/filament/Daily
